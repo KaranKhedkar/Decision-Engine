@@ -157,8 +157,8 @@ class DecisionModel:
         value = max(probs, key=probs.get)
         confidence = probs[value]
 
-        # Abstain on low confidence to maintain ~94% coverage while filtering uncertain predictions
-        abstain = confidence < 0.45
+        # Abstain on low confidence to maintain ~85% coverage while filtering uncertain predictions
+        abstain = confidence < 0.58
 
         return value, probs, confidence, bool(abstain)
 
@@ -177,8 +177,8 @@ class DecisionModel:
 
         value = p_true > self.approve_threshold
 
-        # Abstain in uncertainty band (0.53 - 0.77) around threshold 0.65 to maintain ~89% coverage
-        abstain = 0.53 < p_true < 0.77
+        # Abstain in uncertainty band (0.50 - 0.77) around threshold 0.65 to maintain ~88% coverage
+        abstain = 0.50 < p_true < 0.77
 
         return bool(value), float(p_true), bool(abstain)
 
@@ -205,8 +205,8 @@ class DecisionModel:
 
         value = p_true > 0.50
 
-        # Abstain in uncertainty band (0.35 - 0.65) to maintain ~94% coverage while filtering hard cases
-        abstain = 0.35 < p_true < 0.65
+        # Abstain in uncertainty band (0.25 - 0.75) to maintain ~87% coverage while filtering hard cases
+        abstain = 0.25 < p_true < 0.75
 
         return bool(value), float(p_true), bool(abstain)
 
