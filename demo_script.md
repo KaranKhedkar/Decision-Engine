@@ -59,25 +59,35 @@ curl -X POST http://localhost:8000/v1/decide \
   -H "Content-Type: application/json" \
   -d '{"request_id":"demo-4","decision":"approve","state":{"subject":"Special Request","body":"Looking for an exception on my enterprise plan.","amount":450.0,"customer_tier":"enterprise"}}'
 ```
-> *"Here, the amount ($450) is near the enterprise boundary and mentions policy exception. The model computes `p_true = 0.61`, which falls directly inside the critical uncertainty band (0.53 to 0.77). Output: `abstain: true`. Instead of guessing wrongly under a 3x penalty, it safely escalates to a human agent."*
+> *"Here, the amount ($450) is near the enterprise boundary and mentions policy exception. The model computes `p_true = 0.61`, which falls directly inside the critical uncertainty band (0.50 to 0.77). Output: `abstain: true`. Under our 3:1 asymmetric cost penalty, a false approval costs three times as much as a false hold—so the engine safely routes borderline uncertainty to human review.*
+>
+> *Our calibrated thresholds across all three tasks are:*
+> *- **Route:** Abstain when top probability $< 0.58$ (coverage: 84.6%).*
+> *- **Approve:** Abstain when $0.50 < p_{true} < 0.77$ (coverage: 88.5%).*
+> *- **Grounded:** Abstain when $0.25 < p_{true} < 0.75$ (coverage: 87.1%).*
+> *All three maintain safe coverage above the 80% penalty floor."*
 
 ---
 
 ### [2:00 – 2:30] Official Measured Benchmark Results
 > *"Here are our scores measured by the official `selfcheck.py` over 4,500 requests on `data/dev.jsonl`:*
 >
-> - **Total Score:** **74.18 / 100**
-> - **Quality (40%):** **29.96 / 40.00** *(Route Macro-F1: 0.8746, Approve Cost: 0.2352 vs 0.3704 hold, Grounded Macro-F1: 0.9139)*
-> - **Calibration (25%):** **18.02 / 25.00** *(Mean ECE: 0.0436, Brier Skill: 0.6599)*
-> - **Latency (20%):** **20.00 / 20.00 (Full Marks)** *(p95 is 22.2 ms, well below the 25 ms full-marks threshold)*
-> - **Abstention (15%):** **6.20 / 15.00** *(Safe coverage between 88% and 94%, well above the 80% penalty floor)*
+> - **Total Score:** **75.51 / 100**
+> - **Quality (40%):** **31.10 / 40.00** *(Route Macro-F1: 0.9125, Approve Cost: 0.2282 vs 0.3705 hold baseline, Grounded Macro-F1: 0.9329)*
+> - **Calibration (25%):** **18.21 / 25.00** *(Mean ECE: 0.0411, Brier Skill: 0.6619)*
+> - **Latency (20%):** **20.00 / 20.00 (Full Marks)** *(Route p95: 21.6 ms, Approve p95: 16.6 ms, Grounded p95: 21.9 ms; Mean p95 is 20.03 ms, well below the 25 ms full-marks threshold)*
+> - **Abstention (15%):** **6.21 / 15.00** *(Selective risk at 80% coverage: Route 0.070, Approve 0.081, Grounded 0.062; declared coverage 84%–89%)*
 > - **All Gates Passed:** 100% schema clean (4,500/4,500), 0 connection errors, and ~35 MB artifacts (limit 500 MB)."*
 
 ---
 
-### [2:30 – 3:00] Trade-Off Made & Conclusion
-> *"One key trade-off we made: We opted for a high-dimensional feature-hashing backbone rather than a multi-hundred-megabyte transformer. While a transformer might squeeze out marginally higher raw F1, on a standard 4-core CPU it would land at 150 to 300 milliseconds per request—failing the latency gate and costing points.*
+### [2:30 – 3:00] Core Trade-Offs & Conclusion
+> *"Building Decide required balancing four competing forces: accuracy, calibrated confidence, selective abstention, and CPU latency:*
 >
-> *Our design stays at 15 to 22 ms p95, requires zero network or GPU, and fits into 35 MB of memory.*
+> *1. **CPU Latency vs Deep Architectures:** We chose a high-dimensional feature-hashing backbone ($2^{17}$) rather than a multi-hundred-megabyte transformer. On a standard 4-core CPU without a GPU, a neural transformer lands at 150–300 ms, failing the hard latency gate. Our shared hash projection runs in 15–22 ms p95, securing full marks on latency (20/20).*
 >
-> *Code, model card, and results are pushed and public at `github.com/KaranKhedkar/Decision-Engine`. The service is running live and ready for automated judging. Thank you!"*
+> *2. **Accuracy vs Cost & Calibration:** Under the 3:1 asymmetric approval penalty, raw accuracy is deceptive. By retraining with cost-sensitive class weights and 5-fold isotonic calibration, we reduced false approvals from 102 to 86 and lowered approval cost to 0.2282, achieving a 0.0269 ECE.*
+>
+> *3. **Abstention vs Coverage:** Selective prediction prunes the high-uncertainty tail from answered decisions, boosting answered quality. By carefully sizing the abstention bands around the critical decision boundaries, we maintain 84%–89% coverage—reaping quality gains while staying comfortably above the 80% penalty floor.*
+>
+> *Code, model card, and benchmark results are pushed and public at `github.com/KaranKhedkar/Decision-Engine`. The service is running live and ready for automated judging. Thank you!"*
