@@ -1,0 +1,30 @@
+{
+  "vectorizer_params": {
+    "n_features": 131072,
+    "ngram_range": [
+      1,
+      2
+    ],
+    "alternate_sign": false,
+    "lowercase": true,
+    "strip_accents": "unicode"
+  },
+  "approve_threshold": 0.65,
+  "queues": [
+    "billing",
+    "technical",
+    "account",
+    "shipping",
+    "general"
+  ],
+  "tiers": [
+    "free",
+    "pro",
+    "enterprise"
+  ],
+  "tier_limits": {
+    "free": 31.1,
+    "pro": 121.29,
+    "enterprise": 499.45
+  }
+}
