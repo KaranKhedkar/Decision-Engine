@@ -19,21 +19,21 @@
 
 ## Measured Performance (on `data/dev.jsonl` via `selfcheck.py`)
 
-### Ranked Summary Score: **75.51 / 100**
+### Ranked Summary Score: **75.58 / 100**
 | Axis | Weight | Score | Contribution |
 |---|---|---|---|
-| **Quality** | 40% | 0.7775 | **31.10 / 40.00** |
-| **Calibration** | 25% | 0.7282 | **18.21 / 25.00** |
+| **Quality** | 40% | 0.7782 | **31.13 / 40.00** |
+| **Calibration** | 25% | 0.7280 | **18.20 / 25.00** |
 | **Latency** | 20% | 1.0000 | **20.00 / 20.00** |
-| **Abstention** | 15% | 0.4139 | **6.21 / 15.00** |
-| **Total** | 100% | — | **75.51 / 100.00** |
+| **Abstention** | 15% | 0.4165 | **6.25 / 15.00** |
+| **Total** | 100% | — | **75.58 / 100.00** |
 
 ### Per-Decision Metrics
 - **Routing:**
-  - Macro-F1: **0.9125** (vs majority baseline 0.0849)
-  - Accuracy: **0.8453**
-  - ECE: **0.0563**
-  - Brier Skill: **0.7040**
+  - Macro-F1: **0.9132** (vs majority baseline 0.0849)
+  - Accuracy: **0.8460**
+  - ECE: **0.0566**
+  - Brier Skill: **0.7050**
   - Declared Coverage: **84.6%** (safely above 80% target)
 - **Approval (3:1 Asymmetric Cost):**
   - Cost: **0.2282** (vs always-hold 0.3705, always-approve 1.8886)
@@ -42,20 +42,20 @@
   - Brier Score: **0.0932** (Brier Skill: 0.6150)
   - Declared Coverage: **88.5%** (safely above 80% target)
 - **Grounding:**
-  - Macro-F1: **0.9329** (vs majority baseline 0.3901)
-  - ECE: **0.0400**
-  - Brier Score: **0.0784** (Brier Skill: 0.6660)
+  - Macro-F1: **0.9337** (vs majority baseline 0.3901)
+  - ECE: **0.0407**
+  - Brier Score: **0.0778** (Brier Skill: 0.6690)
   - Declared Coverage: **87.1%** (safely above 80% target)
 
 ### Latency (Single-threaded, warm, persistent HTTP connection)
-- **Route p95:** 21.60 ms (p50: 15.47 ms)
-- **Approve p95:** 16.60 ms (p50: 11.77 ms)
-- **Grounded p95:** 21.88 ms (p50: 15.82 ms)
-- **Mean p95:** **20.03 ms** (passes 100ms hard gate and beats the 25ms full-marks threshold).
+- **Route p95:** 15.37 ms (p50: 10.54 ms)
+- **Approve p95:** 11.95 ms (p50: 8.07 ms)
+- **Grounded p95:** 17.05 ms (p50: 12.24 ms)
+- **Mean p95:** **14.79 ms** (passes 100ms hard gate and easily beats the 25ms full-marks threshold).
 
 ### Gates Verification
 - `schema_clean`: **PASS** (4,500 / 4,500 valid responses, 0 violations).
-- `latency_under_gate`: **PASS** (20.03 ms << 100 ms).
+- `latency_under_gate`: **PASS** (14.79 ms << 100 ms).
 - `reachable`: **PASS** (0 connection drops, 0 transport errors).
 
 ## Abstention Policy & Selective Prediction

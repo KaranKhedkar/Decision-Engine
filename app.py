@@ -37,7 +37,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="Decide", docs_url=None, redoc_url=None, lifespan=lifespan)
+app = FastAPI(title="Decide", docs_url="/docs", redoc_url=None, lifespan=lifespan)
 
 
 class State(BaseModel):

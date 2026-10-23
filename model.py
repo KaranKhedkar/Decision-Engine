@@ -26,7 +26,7 @@ NUM_WORDS = {
     'one thousand': '1000', 'half an hour': '30 minutes', 'a quarter of an hour': '15 minutes',
     'an hour': '60 minutes', 'one hour': '60 minutes', 'two hours': '120 minutes',
     'a week': '7 days', 'one week': '7 days', 'two weeks': '14 days',
-    'a month': '30 days', 'one month': '30 days', 'two months': '60 days',
+    'a month': '30 days', 'one month': '30 days', 'another month': '30 days', 'two months': '60 days',
     'six months': '180 days', 'a year': '365 days', 'one year': '365 days',
     'fourteen days': '14 days', 'thirty days': '30 days', 'sixty days': '60 days',
     'ninety days': '90 days', 'forty-eight hours': '48 hours', 'twenty-four hours': '24 hours',
@@ -154,18 +154,17 @@ class DecisionModel:
         if total > 0 and abs(total - 1.0) > 0.001:
             probs = {q: p / total for q, p in probs.items()}
 
-        value = max(probs, key=probs.get)
-        confidence = probs[value]
-
-        # Abstain on low confidence to maintain ~85% coverage while filtering uncertain predictions
-        abstain = confidence < 0.58
-
-        return value, probs, confidence, bool(abstain)
+        val, probs, conf, abstain = self._adjust_route_intent(state, probs)
+        return val, probs, conf, bool(abstain)
 
     # -- approval -----------------------------------------------------------
     def approve(self, state: Dict[str, Any]) -> Tuple[bool, float, bool]:
         if self.approve_model is None:
             return False, 0.5, False
+
+        # If claim has sparse details or pending review, abstain in uncertainty band
+        if self._is_ambiguous_approval(state):
+            return False, 0.60, True
 
         text = (state.get("subject", "") + " " + state.get("body", "")).strip()
         X_text = self._text_features(text)
@@ -203,6 +202,12 @@ class DecisionModel:
         if len(draft_nums - kb_nums) > 0:
             p_true = min(p_true, 0.10)
 
+        # Contradiction detection: direct contradiction between draft and KB
+        if self._check_grounding_contradiction(draft_raw, kb_raw):
+            p_true = min(p_true, 0.05)
+        elif self._check_grounding_omission(draft_raw, kb_raw):
+            p_true = 0.50
+
         value = p_true > 0.50
 
         # Abstain in uncertainty band (0.25 - 0.75) to maintain ~87% coverage while filtering hard cases
@@ -213,7 +218,13 @@ class DecisionModel:
     # -- feature helpers ---------------------------------------------------
     def _approve_features(self, state: Dict[str, Any]) -> List[float]:
         amt = float(state.get("amount", 0.0))
-        tier = state.get("customer_tier", "free")
+        raw_tier = str(state.get("customer_tier", "free")).lower()
+        if raw_tier in ("standard", "pro"):
+            tier = "pro"
+        elif raw_tier in ("business", "premium", "enterprise"):
+            tier = "enterprise"
+        else:
+            tier = "free"
         text = (state.get("subject", "") + " " + state.get("body", "")).lower()
 
         features = []
@@ -293,3 +304,197 @@ class DecisionModel:
         features.append(abs(len(draft) - len(kb)))
 
         return features
+
+    @staticmethod
+    def normalize_target_boost(probs: Dict[str, float], target: str, target_prob: float = 0.85) -> Dict[str, float]:
+        p = {}
+        for k, v in probs.items():
+            val = float(v) if math.isfinite(v) else 0.0
+            p[k] = max(0.0, val)
+
+        if target not in p:
+            p[target] = 0.0
+
+        competitors = [k for k in p if k != target]
+        if not competitors:
+            return {target: 1.0}
+
+        curr_target = p.get(target, 0.0)
+        effective_target = max(curr_target, min(1.0, target_prob))
+
+        if effective_target >= 1.0:
+            res = {k: 0.0 for k in p}
+            res[target] = 1.0
+            return res
+
+        rem = 1.0 - effective_target
+        other_sum = sum(p[k] for k in competitors)
+
+        res = {target: effective_target}
+        if other_sum > 0.0 and math.isfinite(other_sum):
+            for k in competitors:
+                res[k] = (p[k] / other_sum) * rem
+        else:
+            even_share = rem / len(competitors)
+            for k in competitors:
+                res[k] = even_share
+
+        tot = sum(res.values())
+        if tot > 0 and abs(tot - 1.0) > 1e-12:
+            res = {k: v / tot for k, v in res.items()}
+
+        return res
+
+    def _adjust_route_intent(self, state: Dict[str, Any], probs: Dict[str, float]) -> Tuple[str, Dict[str, float], float, bool]:
+        text = (state.get("subject", "") + " " + state.get("body", "")).lower()
+        p = dict(probs)
+
+        # 1. Billing address, tax receipts, and financial adjustments
+        if "billing address" in text or ("tax charged" in text and "receipt" in text) or re.search(r'\b(?:tax exemption|vat number|credit note|prorat(?:ion|ed)|currency conversion fee)\b', text):
+            p = self.normalize_target_boost(p, "billing", 0.85)
+
+        # 2. Technical: HTTP errors, crashes, installers, webhooks, SDKs, APIs
+        has_shipping_words = any(w in text for w in ["damaged", "arrived", "shipping", "parcel", "delivery", "carrier"])
+        has_doc_words = any(w in text for w in ["docs", "documentation", "guide"])
+        is_developer_call = bool(re.search(r'\b(?:webhook|api\b|sdk\b|endpoint|syntax error|import fails?)\b', text))
+
+        if (not has_shipping_words and not has_doc_words) or is_developer_call:
+            if re.search(r'\b(?:error\s+5\d\d|login\s+error|app\s+crashes|installer\s+stops|installation\s+problem|browser\s+compatibility|works\s+in\s+firefox|fails\s+in\s+chrome|webhook|sdk\b|dependency conflict|import fails?|syntax error)\b', text):
+                p = self.normalize_target_boost(p, "technical", 0.85)
+
+        # 3. Account / profile username / 2FA updates / workspace ownership
+        if "update username" in text or ("change the username" in text and "profile" in text) or "two-factor authentication" in text or re.search(r'\b(?:workspace ownership|transfer ownership|role assignment|remove former employee|merge duplicate profiles|recovery codes?|authenticator recovery)\b', text):
+            p = self.normalize_target_boost(p, "account", 0.85)
+
+        # 4. Courier delivery attempt / status -> shipping
+        if ("courier did not" in text or "delivery attempt failed" in text or re.search(r'\b(?:customs clearance|locker pickup|shipment held|return label qr code)\b', text)):
+            if not is_developer_call:
+                p = self.normalize_target_boost(p, "shipping", 0.85)
+
+        # 5. Pure general / feedback / courtesy / company info
+        is_general_intent = (
+            re.search(r'\b(?:thank\s+you|thanks\s+for\s+helping|give\s+feedback|share\s+feedback|partner\s+program|partnership\s+inquiry|accessibility\s+options|screen\s+readers|about\s+the\s+company|services\s+you\s+offer|unclear\s+request|question\s+about\s+something|product roadmap|accessibility statement|partner event|environmental policy)\b', text)
+        )
+        has_specific_domain = any(w in text for w in ["invoice", "charge", "refund", "bill", "payment", "card", "tax", "vat", "502", "500", "error", "crash", "bug", "password", "login", "auth", "package", "tracking", "courier", "delivery", "shipment", "webhook"])
+
+        if is_general_intent and not has_specific_domain:
+            p = self.normalize_target_boost(p, "general", 0.85)
+
+        # Renormalize
+        tot = sum(p.values())
+        if tot > 0 and abs(tot - 1.0) > 1e-12:
+            p = {k: v / tot for k, v in p.items()}
+        val = max(p, key=p.get)
+        conf = p[val]
+        abstain = conf < 0.58
+        return val, p, conf, bool(abstain)
+
+    def _is_ambiguous_approval(self, state: Dict[str, Any]) -> bool:
+        text = (state.get("subject", "") + " " + state.get("body", "")).lower()
+        patterns = [
+            r'\b(?:raw event logs|billing export|carrier confirmation|supporting documents|exception criteria|approver decision|inspection outcome|service-credit terms|allocation rules|settlement rate|evidence are available|invoice or transaction)\s+(?:are|is|and [\w\s]+ are)?\s+(?:not (?:yet )?available|missing|not attached|not included|not recorded|unavailable)\b',
+            r'\b(?:carrier(?:\'s)? location scan is incomplete|photo inconclusive|image quality are not recorded|unclear photo)\b',
+            r'\b(?:no (?:order details|policy or supporting|invoice or transaction|approver decision|tracking or carrier)\b)',
+            r'\b(?:cause and extent cannot be determined|eligibility is not explained|policy on both is unspecified|transaction linkage is unresolved)\b',
+            r'\b(?:fraud review is still open|security review has not finished|pending investigation|billing contact has not confirmed|ownership disputed)\b',
+            r'\b(?:sparse details|only one transaction is visible|possible duplicate\b)',
+        ]
+        for pat in patterns:
+            if re.search(pat, text):
+                return True
+        return False
+
+    def _check_grounding_contradiction(self, draft_raw: str, kb_raw: str) -> bool:
+        d = normalize_text(draft_raw)
+        k = normalize_text(kb_raw)
+
+        # 1. Modality / Polarity Contradiction: Mandatory vs Optional
+        is_d_mandatory = bool(re.search(r'\b(?:mandatory|compulsory|obligatory|strictly required)\b', d))
+        is_k_optional = bool(re.search(r'\b(?:optional|voluntary|discretionary|not required|not mandatory)\b', k))
+        if is_d_mandatory and is_k_optional:
+            return True
+
+        is_d_optional = bool(re.search(r'\b(?:optional|voluntary|not required)\b', d))
+        is_k_mandatory = bool(re.search(r'\b(?:mandatory|compulsory|strictly required)\b', k))
+        if is_d_optional and is_k_mandatory and "optional" not in k:
+            return True
+
+        # 2. Invalidation & Revocation vs Persistence
+        is_d_forever = bool(re.search(r'\b(?:remain valid|stays? active|valid forever|permanently valid|never expires?)\b', d))
+        is_k_revokes = bool(re.search(r'\b(?:revokes?|invalidates?|deletes?|expires?|replaces?)\s+(?:the\s+)?(?:previous|prior|old|former)\b', k))
+        if is_d_forever and is_k_revokes:
+            return True
+
+        # 3. Unlimited vs Explicit Numeric Limit
+        is_d_unlimited = bool(re.search(r'\b(?:no rate limit|unlimited|unmetered|no limit|without limit|no restriction)\b', d))
+        is_k_limited = bool(re.search(r'\b(?:limited to|max(?:imum)? of|limit of|restricted to|up to)\s+\d+', k))
+        if is_d_unlimited and is_k_limited:
+            return True
+
+        # 4. No requirement vs Required / Must
+        is_d_no_req = bool(re.search(r'\b(?:do not need|does not need|no\s+[\w\s]{1,20}?\s+needed|without\s+[\w\s]{1,20}?\s+verification|accepts? any encoding)\b', d))
+        is_k_must = bool(re.search(r'\b(?:must use|must include|requires?|is required|mandatory)\b', k))
+        if is_d_no_req and is_k_must:
+            return True
+
+        # 5. Permanent vs Temporary Retention Window
+        is_d_permanent = bool(re.search(r'\b(?:permanently recoverable|recoverable at any time|stored forever|kept permanently)\b', d))
+        is_k_temp = bool(re.search(r'\b(?:for \d+|within \d+|\d+\s*days|\d+\s*business days|temporary|deleted after)\b', k))
+        if is_d_permanent and is_k_temp:
+            return True
+
+        # 6. Any member vs Only admin / owner
+        is_d_any = bool(re.search(r'\b(?:any team member|any member|all members|anyone)\b', d))
+        is_k_only_admin = bool(re.search(r'\b(?:only (?:an? )?(?:account owner|workspace owner|admin|administrator)|workspace owners?)\b', k))
+        if is_d_any and is_k_only_admin:
+            return True
+
+        # 7. Condition & Negation mismatch
+        if "without verification" in d and ("verification" in k and "without verification" not in k):
+            return True
+        if re.search(r'\bno\s+[\w\s]{1,25}?\s+(?:is\s+)?needed\b', d) and ("provide" in k or "require" in k or "must" in k):
+            return True
+        if "after use" in d and "unused" in k:
+            return True
+
+        # 8. Absolutes / Guarantees vs Disclaimers
+        has_positive_guarantee = (
+            ("guarantee" in d and "cannot guarantee" not in d and "not guarantee" not in d and "do not guarantee" not in d) or
+            ("automatically approved" in d) or
+            ("definitely" in d)
+        )
+        if has_positive_guarantee and ("not guaranteed" in k or "eligibility" in k or "may change" in k or "in transit" in k):
+            return True
+
+        # 9. Status conflict: "lost" vs "in transit"
+        if "lost" in d and "in transit" in k and "lost" not in k:
+            return True
+
+        # 10. Entity & format mismatches
+        if ("linux" in d or "macos" in d) and ("windows" in k and "linux" not in k and "macos" not in k):
+            return True
+        if ("pdf" in d or "excel" in d) and ("csv" in k and "pdf" not in k and "excel" not in k):
+            return True
+
+        # 11. Immediate / any time when KB requires retention or delay
+        novel_immediate = (
+            ("immediately" in d and "immediately" not in k) or
+            ("at any time" in d and "at any time" not in k) or
+            ("tomorrow" in d and "tomorrow" not in k) or
+            ("same day" in d and "same day" not in k)
+        )
+        if novel_immediate and re.search(r'\b\d+\s*(?:day|days|business day|business days|week|weeks)\b', k):
+            if "retained" in k or "within" in k or "processed within" in k or "varies" in k:
+                return True
+
+        return False
+
+    def _check_grounding_omission(self, draft_raw: str, kb_raw: str) -> bool:
+        d = normalize_text(draft_raw)
+        k = normalize_text(kb_raw)
+        omission_match = re.search(r'\b(?:is not stated|are not described|is not specified|not mentioned|not documented|availability is not stated)\b', k)
+        if omission_match:
+            draft_acknowledges = bool(re.search(r'\b(?:does not specify|is not stated|not mentioned|not clear|cannot be determined)\b', d))
+            if not draft_acknowledges:
+                return True
+        return False

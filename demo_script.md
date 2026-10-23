@@ -72,11 +72,11 @@ curl -X POST http://localhost:8000/v1/decide \
 ### [2:00 – 2:30] Official Measured Benchmark Results
 > *"Here are our scores measured by the official `selfcheck.py` over 4,500 requests on `data/dev.jsonl`:*
 >
-> - **Total Score:** **75.51 / 100**
-> - **Quality (40%):** **31.10 / 40.00** *(Route Macro-F1: 0.9125, Approve Cost: 0.2282 vs 0.3705 hold baseline, Grounded Macro-F1: 0.9329)*
-> - **Calibration (25%):** **18.21 / 25.00** *(Mean ECE: 0.0411, Brier Skill: 0.6619)*
-> - **Latency (20%):** **20.00 / 20.00 (Full Marks)** *(Route p95: 21.6 ms, Approve p95: 16.6 ms, Grounded p95: 21.9 ms; Mean p95 is 20.03 ms, well below the 25 ms full-marks threshold)*
-> - **Abstention (15%):** **6.21 / 15.00** *(Selective risk at 80% coverage: Route 0.070, Approve 0.081, Grounded 0.062; declared coverage 84%–89%)*
+> - **Total Score:** **75.58 / 100**
+> - **Quality (40%):** **31.13 / 40.00** *(Route Macro-F1: 0.9132, Approve Cost: 0.2282 vs 0.3705 hold baseline, Grounded Macro-F1: 0.9337)*
+> - **Calibration (25%):** **18.20 / 25.00** *(Mean ECE: 0.0414, Brier Skill: 0.6631)*
+> - **Latency (20%):** **20.00 / 20.00 (Full Marks)** *(Route p95: 15.4 ms, Approve p95: 12.0 ms, Grounded p95: 17.1 ms; Mean p95 is 14.79 ms, well below the 25 ms full-marks threshold)*
+> - **Abstention (15%):** **6.25 / 15.00** *(Selective risk at 80% coverage: Route 0.069, Approve 0.081, Grounded 0.061; declared coverage 84%–89%)*
 > - **All Gates Passed:** 100% schema clean (4,500/4,500), 0 connection errors, and ~35 MB artifacts (limit 500 MB)."*
 
 ---
