@@ -251,7 +251,7 @@ def main():
     print("\n" + "="*60)
     print("TRAINING: Approve Head")
     print("="*60)
-    appr_lr = LogisticRegression(C=2.0, max_iter=300, solver='lbfgs')
+    appr_lr = LogisticRegression(C=2.0, max_iter=400, solver='lbfgs', class_weight={0: 1.0, 1: 0.8})
     appr_cal = CalibratedClassifierCV(appr_lr, method='isotonic', cv=5)
     appr_cal.fit(X_train_approve, y_approve_train)
     appr_probs = appr_cal.predict_proba(X_dev_approve)[:, 1]

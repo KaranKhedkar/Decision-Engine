@@ -135,10 +135,10 @@ The engine uses **one shared feature backbone** that projects incoming text into
 ## Abstention Policy
 
 The engine abstains when its confidence signal reflects high epistemic uncertainty:
-- **Route:** Abstains when top predicted probability $< 0.45$.
-- **Approve:** Abstains in the critical uncertainty window $(0.53 < p < 0.77)$ around the $0.65$ decision boundary.
-- **Grounded:** Abstains within $(0.35 < p < 0.65)$ around the $0.50$ decision boundary.
-- **Coverage:** All three decisions achieve declared coverage between **88% and 95%**, well above the $80\%$ minimum floor.
+- **Route:** Abstains when top predicted probability $< 0.58$.
+- **Approve:** Abstains in the critical uncertainty window $(0.50 < p < 0.77)$ around the $0.65$ decision boundary.
+- **Grounded:** Abstains within $(0.25 < p < 0.75)$ around the $0.50$ decision boundary.
+- **Coverage:** All three decisions achieve declared coverage between **84% and 89%**, well above the $80\%$ minimum floor.
 
 ---
 
@@ -148,25 +148,25 @@ Evaluated on all 1,500 records (4,500 total decisions) of `data/dev.jsonl`:
 
 | Metric / Category | Result | Target / Baseline | Status |
 |---|---|---|---|
-| **Overall Score** | **74.18 / 100** | — | Ranked |
-| **Quality Score (40%)** | **0.7489 (29.96 pts)** | Scored vs trivial | High |
-| - Route Macro-F1 | 0.8746 | vs majority 0.0835 | ✓ |
-| - Approve Cost | 0.2352 | vs always-hold 0.3704 | ✓ (3:1 FP cost) |
-| - Grounded Macro-F1 | 0.9139 | vs majority 0.3857 | ✓ |
-| **Calibration Score (25%)** | **0.7209 (18.02 pts)** | ECE + Brier Skill | High |
-| - Mean ECE | 0.0436 | Target < 0.20 | ✓ |
-| - Mean Brier Skill | 0.6599 | Target > 0.00 | ✓ |
+| **Overall Score** | **75.51 / 100** | — | **Ranked** |
+| **Quality Score (40%)** | **0.7775 (31.10 pts)** | Scored vs trivial | **High (+1.14 pts)** |
+| - Route Macro-F1 | 0.9125 | vs majority 0.0849 | ✓ |
+| - Approve Cost | 0.2282 | vs always-hold 0.3705 | ✓ (3:1 FP cost) |
+| - Grounded Macro-F1 | 0.9329 | vs majority 0.3901 | ✓ |
+| **Calibration Score (25%)** | **0.7282 (18.21 pts)** | ECE + Brier Skill | **High (+0.19 pts)** |
+| - Mean ECE | 0.0411 | Target < 0.20 | ✓ |
+| - Mean Brier Skill | 0.6619 | Target > 0.00 | ✓ |
 | **Latency Score (20%)** | **1.0000 (20.00 pts)** | Gate 100ms / Full 25ms | **Full Marks** |
-| - Route p95 | 23.48 ms | < 25 ms | ✓ |
-| - Approve p95 | 18.47 ms | < 25 ms | ✓ |
-| - Grounded p95 | 24.67 ms | < 25 ms | ✓ |
-| - Mean p95 | **22.21 ms** | < 25 ms | **Full Marks** |
-| **Abstention Score (15%)** | **0.4134 (6.20 pts)** | Risk @ 80% coverage | ✓ |
+| - Route p95 | 21.60 ms | < 25 ms | ✓ |
+| - Approve p95 | 16.60 ms | < 25 ms | ✓ |
+| - Grounded p95 | 21.88 ms | < 25 ms | ✓ |
+| - Mean p95 | **20.03 ms** | < 25 ms | **Full Marks** |
+| **Abstention Score (15%)** | **0.4139 (6.21 pts)** | Risk @ 80% coverage | ✓ |
 | **Artifacts Total Size** | **~35 MB** | Hard ceiling: 500 MB | ✓ |
 
 ### Hard Gates Verification
 - `schema_clean`: **PASS** (4,500 / 4,500 valid responses, 0 errors)
-- `latency_under_gate`: **PASS** (22.21 ms << 100 ms)
+- `latency_under_gate`: **PASS** (20.03 ms << 100 ms)
 - `reachable`: **PASS** (100% reachable, 0 drops)
 
 ---
