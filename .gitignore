@@ -8,6 +8,14 @@ env/
 data/*.jsonl
 PS-2.docx
 
+# Internal QA, test runners, local scripts, and presentation notes
+testing/
+test-2/
+scratch/
+demo_script.md
+model.py.bak
+baseline_results.json
+
 # NOTE: artifacts/ is deliberately NOT ignored. The judges have to be able to
 # start your service from a clean clone, so commit your weights if they fit
 # (the limit is 500MB total). If they are too large for your git host, say in
