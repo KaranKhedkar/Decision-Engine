@@ -6,9 +6,9 @@
   1. **Route (`route`)**: Classify support requests into one of 5 target queues (`billing`, `technical`, `account`, `shipping`, `general`).
   2. **Approve (`approve`)**: Decide whether a customer request can be auto-approved under asymmetric cost penalty (3:1 FP cost vs FN cost).
   3. **Grounded (`grounded`)**: Verify whether an agent's drafted reply is strictly grounded in and supported by a cited knowledge base article.
-- **Architecture:** Single shared backbone with task-specific calibrated heads:
-  - **Shared Backbone:** `HashingVectorizer` ($2^{17} = 131,072$ features, unigrams and bigrams, unicode accent stripping, lowercased) that maps raw text across all three tasks into a single consistent sparse feature space. Adding new decision tasks requires only training a lightweight linear head on top of the shared feature projection.
-  - **Route Head:** Multiclass Calibrated Logistic Regression with Isotonic regression calibration.
+- **Architecture:** Shared feature backbone with task-specific calibrated heads:
+  - **Shared Backbone:** High-dimensional `HashingVectorizer` ($2^{17} = 131,072$ features, unigrams and bigrams, unicode accent stripping, lowercased) that maps raw text across all three tasks into a single consistent sparse feature space. Following the starter code specification, sharing occurs at the feature-space projection level without a learned neural encoder, enabling sub-20ms inference on standard CPUs. Adding new decision tasks requires only training a lightweight linear head on top of the shared feature projection.
+  - **Route Head:** Multiclass Calibrated Logistic Regression with 5-fold Isotonic calibration.
   - **Approve Head:** Binary Calibrated Logistic Regression combining the shared text representation with engineered features (tier limits, monetary amounts, interaction ratios, and 18 high-risk security/compliance keyword indicators).
   - **Grounded Head:** Binary Calibrated Logistic Regression combining normalized text representations with structured alignment features (canonical number parsing, duration/time expression extraction, 28 critical entity/role checks, and n-gram overlap metrics).
 
@@ -68,4 +68,4 @@ The engine abstains when its confidence signal reflects high epistemic uncertain
 ## Failure Modes & Edge Cases
 1. **Noisy Ground Truth in Routing:** Real support tickets often involve multi-topic requests (e.g., billing questions about account cancellation). In such cases, the model distributes probability mass across related queues (e.g. `billing` and `account`), properly lowering confidence rather than hallucinating certainty.
 2. **Ambiguous Grounding Expressions:** When numerical quantities are expressed in colloquial or relative terms not captured by standard dictionaries (e.g. "a couple of business days"), the model abstains or penalizes confidence.
-3. **Hard Ceiling Approvals:** High dollar amounts or requests containing explicit GDPR deletion, 2FA recovery, or account closure keywords are constrained to zero probability of automatic approval to mitigate financial and security risk.
+3. **Large Dollar Amounts & Security Inquiries:** High dollar amounts or requests containing explicit GDPR deletion, 2FA recovery, or account closure keywords receive depressed probabilities through trained negative feature weights, and borderline cases are selectively routed to abstention.

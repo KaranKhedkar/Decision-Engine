@@ -175,17 +175,10 @@ class DecisionModel:
 
         p_true = float(self.approve_model.predict_proba(X)[0, 1])
 
-        # Business rule / hard limit check
-        amt = float(state.get("amount", 0.0))
-        tier = state.get("customer_tier", "free")
-        limit = self.tier_limits.get(tier, 50.0)
-        if amt > limit:
-            p_true = 0.0
-
         value = p_true > self.approve_threshold
 
         # Abstain in uncertainty band (0.53 - 0.77) around threshold 0.65 to maintain ~89% coverage
-        abstain = (0.53 < p_true < 0.77) and (p_true > 0.0)
+        abstain = 0.53 < p_true < 0.77
 
         return bool(value), float(p_true), bool(abstain)
 

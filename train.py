@@ -256,14 +256,6 @@ def main():
     appr_cal.fit(X_train_approve, y_approve_train)
     appr_probs = appr_cal.predict_proba(X_dev_approve)[:, 1]
 
-    # Post-process with tier limits
-    for i, r in enumerate(dev_data):
-        amt = float(r['state'].get('amount', 0.0))
-        tier = r['state'].get('customer_tier', 'free')
-        limit = TIER_LIMITS.get(tier, 50.0)
-        if amt > limit:
-            appr_probs[i] = 0.0
-
     best_cost = float('inf')
     best_threshold = 0.65
     for t in np.linspace(0.5, 0.85, 36):
